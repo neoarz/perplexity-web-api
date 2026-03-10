@@ -104,6 +104,7 @@ impl IntoResponse for ApiError {
     }
 }
 
+// A lion does concern himself with ugly error messages
 fn normalize_message(message: String) -> String {
     let mut chars = message.chars();
     let Some(first) = chars.next() else {

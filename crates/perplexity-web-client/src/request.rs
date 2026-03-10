@@ -3,17 +3,17 @@ use serde::Serialize;
 use std::fmt;
 use std::str::FromStr;
 
-/// High-level mode for a Perplexity request.
+/// High-level mode for a Perplexity request
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SearchMode {
-    /// Uses the default search path.
+    /// Uses the default search path
     #[default]
     Auto,
-    /// Uses Perplexity's premium search path.
+    /// Uses Perplexity's premium search path
     Pro,
-    /// Uses a reasoning model.
+    /// Uses a reasoning model
     Reasoning,
-    /// Uses deep research.
+    /// Uses deep research
     DeepResearch,
 }
 
@@ -28,20 +28,19 @@ impl SearchMode {
     }
 }
 
-/// Source filter passed to Perplexity.
+/// Source filter passed to Perplexity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Source {
-    /// General web results.
+    /// General web results
     #[default]
     Web,
-    /// Academic and paper-heavy sources.
+    /// Academic and paper-heavy sources
     Scholar,
-    /// Social content.
+    /// Social content
     Social,
 }
 
 impl Source {
-    /// Returns the string Perplexity expects in the request payload.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Web => "web",
@@ -72,36 +71,35 @@ impl FromStr for Source {
     }
 }
 
-/// Values you can feed back into the next request to continue a conversation.
+/// Values you can feed back into the next request to continue a conversation
 #[derive(Debug, Clone, Default, Serialize, serde::Deserialize)]
 pub struct FollowUpContext {
-    /// Conversation identifier returned by the previous response.
+    /// Conversation identifier returned by the previous response
     pub backend_uuid: Option<String>,
-    /// Attachment URLs that should carry forward into the next turn.
+    /// Attachment URLs that should carry forward into the next turn
     pub attachments: Vec<String>,
 }
 
-/// Request builder for one Perplexity query.
+/// Request builder for one Perplexity query
 #[derive(Debug, Clone, Default)]
 pub struct SearchRequest {
-    /// Natural-language prompt or question.
+    /// Natural-language prompt or question
     pub query: String,
-    /// Search mode.
+    /// Search mode
     pub mode: SearchMode,
-    /// Explicit model override.
+    /// Explicit model override
     pub model_preference: Option<ModelPreference>,
-    /// Source filters.
+    /// Source filters
     pub sources: Vec<Source>,
-    /// Request language, usually something like `en-US`.
+    /// Request language, usually something like `en-US`
     pub language: String,
-    /// Follow-up context from an earlier response.
+    /// Follow-up context from an earlier response
     pub follow_up: Option<FollowUpContext>,
-    /// Whether the request should run in incognito mode.
+    /// Whether the request should run in incognito mode
     pub incognito: bool,
 }
 
 impl SearchRequest {
-    /// Starts a request with sensible defaults for everything except the query.
     pub fn new(query: impl Into<String>) -> Self {
         Self {
             query: query.into(),
@@ -114,37 +112,37 @@ impl SearchRequest {
         }
     }
 
-    /// Switches the request into a different mode.
+    /// Switches the request into a different mode
     pub fn mode(mut self, mode: SearchMode) -> Self {
         self.mode = mode;
         self
     }
 
-    /// Picks a specific model instead of the mode default.
+    /// Picks a specific model instead of the mode default
     pub fn model(mut self, model: impl Into<ModelPreference>) -> Self {
         self.model_preference = Some(model.into());
         self
     }
 
-    /// Replaces the default source list.
+    /// Replaces the default source list
     pub fn sources(mut self, sources: Vec<Source>) -> Self {
         self.sources = sources;
         self
     }
 
-    /// Sets the language sent to Perplexity.
+    /// Sets the language sent to Perplexity
     pub fn language(mut self, language: impl Into<String>) -> Self {
         self.language = language.into();
         self
     }
 
-    /// Continues a previous conversation using the returned follow-up values.
+    /// Continues a previous conversation using the returned follow-up values
     pub fn follow_up(mut self, context: FollowUpContext) -> Self {
         self.follow_up = Some(context);
         self
     }
 
-    /// Turns incognito mode on or off for this request.
+    /// Turns incognito mode on or off for this request
     pub fn incognito(mut self, incognito: bool) -> Self {
         self.incognito = incognito;
         self
