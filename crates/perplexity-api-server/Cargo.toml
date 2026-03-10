@@ -1,12 +1,12 @@
 [package]
-name = "perplexity-web-api-server"
+name = "perplexity-api-server"
 description = "Self-hosted REST API server for Perplexity AI"
 version = "0.1.0"
 publish = false
 edition = { workspace = true }
 
 [[bin]]
-name = "perplexity-web-api-server"
+name = "perplexity-api-server"
 path = "src/main.rs"
 
 [dependencies]

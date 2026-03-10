@@ -1,4 +1,4 @@
-use perplexity_web_api_server::{app, config, telemetry};
+use perplexity_api_server::{app, config, telemetry};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
