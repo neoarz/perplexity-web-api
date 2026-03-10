@@ -1,0 +1,54 @@
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.85"
+
+[workspace.dependencies]
+perplexity-web-client = { path = "crates/perplexity-web-client" }
+
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1", features = ["v4"] }
+futures-util = "0.3"
+
+# Client
+rquest = { version = "5.1", features = ["cookies", "json", "stream"] }
+rquest-util = "2.2"
+bytes = "1"
+memchr = "2"
+regex = "1"
+pin-project-lite = "0.2"
+
+# Server
+dotenvy = "0.15"
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors"] }
+subtle = "2"
+
+[workspace.lints.rust]
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -2 }
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+similar_names = "allow"
+too_many_lines = "allow"
+print_stdout = "warn"
+print_stderr = "warn"
+dbg_macro = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 5
+strip = true

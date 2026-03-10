@@ -1,0 +1,27 @@
+[package]
+name = "perplexity-web-api-server"
+description = "Self-hosted REST API server for Perplexity AI"
+version = "0.1.0"
+publish = false
+edition = { workspace = true }
+
+[[bin]]
+name = "perplexity-web-api-server"
+path = "src/main.rs"
+
+[dependencies]
+perplexity-web-client = { workspace = true }
+
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+futures-util = { workspace = true }
+dotenvy = { workspace = true }
+axum = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+subtle = { workspace = true }
