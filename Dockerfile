@@ -33,7 +33,9 @@ RUN apt-get update \
         curl \
         tzdata \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --create-home --shell /usr/sbin/nologin --uid 10001 appuser
+    && useradd --system --create-home --shell /usr/sbin/nologin --uid 10001 appuser \
+    && mkdir -p /app/logs \
+    && chown -R appuser:appuser /app
 
 WORKDIR /app
 
@@ -42,6 +44,7 @@ COPY --from=builder /out/perplexity-api-server /usr/local/bin/perplexity-api-ser
 ENV HOST=0.0.0.0
 ENV PORT=3000
 ENV RUST_LOG=info
+ENV LOG_FILE=/app/logs/logs.txt
 
 EXPOSE 3000
 

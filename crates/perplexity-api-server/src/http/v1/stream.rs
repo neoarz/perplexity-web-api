@@ -2,6 +2,7 @@ use crate::api::model;
 use crate::api::request::SearchApiRequest;
 use crate::api::response::{FollowUpResponse, SearchApiResponse, StreamEventPayload};
 use crate::error::ApiError;
+use crate::http::logging;
 use crate::http::request::parse_json_request;
 use crate::state::AppState;
 use axum::body::Bytes;
@@ -14,7 +15,7 @@ use perplexity_web_client::SearchEvent;
 use serde::Serialize;
 use std::convert::Infallible;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 pub async fn search_stream(
@@ -22,6 +23,7 @@ pub async fn search_stream(
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>>, ApiError> {
+    let started_at = Instant::now();
     let body: SearchApiRequest = parse_json_request(&headers, &body)?;
     let resolved = model::resolve(body, &state)?;
     let mode_str = resolved.mode_str.clone();
@@ -44,7 +46,16 @@ pub async fn search_stream(
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(64);
 
     tokio::spawn(async move {
-        forward_stream(tx, client_stream, timeout, id, mode_str, model_str).await;
+        forward_stream(
+            tx,
+            client_stream,
+            timeout,
+            id,
+            mode_str,
+            model_str,
+            started_at,
+        )
+        .await;
     });
 
     let stream = futures_util::stream::unfold(rx, |mut rx| async {
@@ -61,6 +72,7 @@ async fn forward_stream(
     id: String,
     mode: String,
     model: String,
+    started_at: Instant,
 ) {
     let mut stream = std::pin::pin!(client_stream);
     let mut last_event = None;
@@ -75,6 +87,7 @@ async fn forward_stream(
                     ApiError::upstream_timeout(format!("The stream took longer than {timeout:?}")),
                 )
                 .await;
+                logging::log_request("POST", "/v1/search/stream", 200, started_at);
                 return;
             }
         };
@@ -88,15 +101,20 @@ async fn forward_stream(
 
                 match send_event(&tx, "message", &payload).await {
                     Ok(true) => last_event = Some(event),
-                    Ok(false) => return,
+                    Ok(false) => {
+                        logging::log_request("POST", "/v1/search/stream", 200, started_at);
+                        return;
+                    }
                     Err(err) => {
                         let _ = send_error(&tx, err).await;
+                        logging::log_request("POST", "/v1/search/stream", 200, started_at);
                         return;
                     }
                 }
             }
             Some(Err(err)) => {
                 let _ = send_error(&tx, ApiError::from_client_error(err)).await;
+                logging::log_request("POST", "/v1/search/stream", 200, started_at);
                 return;
             }
             None => break,
@@ -109,6 +127,7 @@ async fn forward_stream(
             ApiError::perplexity_error("The stream closed before any events came through"),
         )
         .await;
+        logging::log_request("POST", "/v1/search/stream", 200, started_at);
         return;
     };
 
@@ -127,6 +146,8 @@ async fn forward_stream(
     if let Err(err) = send_event(&tx, "done", &response).await {
         let _ = send_error(&tx, err).await;
     }
+
+    logging::log_request("POST", "/v1/search/stream", 200, started_at);
 }
 
 async fn send_event<T: Serialize>(

@@ -1,5 +1,5 @@
 use crate::auth::bearer_auth;
-use crate::http::{health, v1};
+use crate::http::{health, logging, v1};
 use crate::state::AppState;
 use axum::Router;
 use axum::middleware;
@@ -18,5 +18,6 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/health", get(health::health))
         .merge(authed_routes)
         .layer(CorsLayer::permissive())
+        .layer(middleware::from_fn(logging::request_log))
         .with_state(state)
 }

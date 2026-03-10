@@ -8,6 +8,9 @@ services:
       - .env
     environment:
       HOST: 0.0.0.0
+      LOG_FILE: /app/logs/logs.txt
     ports:
       - "3000:3000"
+    volumes:
+      - ./logs:/app/logs
     restart: unless-stopped
