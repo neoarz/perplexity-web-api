@@ -15,20 +15,20 @@ where
 fn validate_json_content_type(headers: &HeaderMap) -> Result<(), ApiError> {
     let Some(value) = headers.get(CONTENT_TYPE) else {
         return Err(ApiError::invalid_request(
-            "Content-Type is missing. Use application/json",
+            "content-type is missing, use application/json",
         ));
     };
 
     let value = value
         .to_str()
-        .map_err(|_| ApiError::invalid_request("Content-Type header isn't valid"))?;
+        .map_err(|_| ApiError::invalid_request("content-type header isn't valid"))?;
     let mime = value.split(';').next().map(str::trim).unwrap_or_default();
 
     if mime.eq_ignore_ascii_case("application/json") {
         Ok(())
     } else {
         Err(ApiError::invalid_request(
-            "Unsupported Content-Type. Use application/json",
+            "unsupported content-type, use application/json",
         ))
     }
 }

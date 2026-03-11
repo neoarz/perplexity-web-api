@@ -72,7 +72,7 @@ pub async fn search_stream(
     .await
     .map_err(|_| {
         ApiError::upstream_timeout(format!(
-            "Setting up the stream took longer than {timeout:?}"
+            "setting up the stream took longer than {timeout:?}"
         ))
         .with_pretty(pretty)
     })?
@@ -108,7 +108,7 @@ async fn forward_stream(
                 let _ = send_error(
                     &tx,
                     ApiError::upstream_timeout(format!(
-                        "The stream took longer than {:?}",
+                        "the stream took longer than {:?}",
                         context.timeout
                     )),
                     context.human_output,
@@ -182,7 +182,7 @@ async fn forward_stream(
     let Some(event) = last_event else {
         let _ = send_error(
             &tx,
-            ApiError::perplexity_error("The stream closed before any events came through"),
+            ApiError::perplexity_error("the stream closed before any events came through"),
             context.human_output,
         )
         .await;
@@ -232,7 +232,7 @@ async fn send_message_event(
     }
 
     let data = serialize_event_payload(payload, human_output, true).map_err(|err| {
-        ApiError::internal(format!("Couldn't serialize the message event: {err}"))
+        ApiError::internal(format!("couldn't serialize the message event: {err}"))
     })?;
 
     if human_output && last_payload.as_deref() == Some(data.as_str()) {
@@ -259,7 +259,7 @@ async fn send_event<T: Serialize>(
     human_output: bool,
 ) -> Result<bool, ApiError> {
     let data = serialize_event_payload(value, human_output, false)
-        .map_err(|err| ApiError::internal(format!("Couldn't serialize the {name} event: {err}")))?;
+        .map_err(|err| ApiError::internal(format!("couldn't serialize the {name} event: {err}")))?;
 
     Ok(tx
         .send(Ok(Event::default().event(name).data(data)))
@@ -280,7 +280,7 @@ async fn send_error(
         Ok(data) => data,
         Err(err) => {
             let fallback =
-                ApiError::internal(format!("Couldn't serialize the error payload: {err}"));
+                ApiError::internal(format!("couldn't serialize the error payload: {err}"));
             match if human_output {
                 serde_json::to_string_pretty(&fallback.body())
             } else {

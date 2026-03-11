@@ -17,7 +17,7 @@ pub struct ResolvedQuery {
 pub fn resolve(req: SearchApiRequest, state: &Arc<AppState>) -> Result<ResolvedQuery, ApiError> {
     let query = req.query.trim().to_string();
     if query.is_empty() {
-        return Err(ApiError::invalid_request("Query can't be empty"));
+        return Err(ApiError::invalid_request("query can't be empty"));
     }
 
     let sources = parse_sources(&req.sources)?;
@@ -108,7 +108,7 @@ fn resolve_mode_and_model(
         ApiMode::Research => {
             if model.is_some() {
                 return Err(ApiError::invalid_request(
-                    "Research mode doesn't take a model",
+                    "research mode doesn't take a model",
                 ));
             }
             Ok((

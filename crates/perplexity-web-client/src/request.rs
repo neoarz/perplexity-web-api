@@ -67,7 +67,7 @@ impl FromStr for Source {
             "scholar" => Ok(Self::Scholar),
             "social" => Ok(Self::Social),
             _ => Err(format!(
-                "Unknown source '{s}'. Try one of: web, scholar, social"
+                "unknown source '{s}', try one of: web, scholar, social"
             )),
         }
     }

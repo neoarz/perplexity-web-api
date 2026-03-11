@@ -84,6 +84,13 @@ If `PERPLEXITY_API_KEY` is unset, the API is open.
 
 ## Examples
 
+### List models
+
+```bash
+curl -sS http://127.0.0.1:3000/v1/models \
+  -H 'Authorization: Bearer YOUR_API_KEY'
+```
+
 ### Search
 
 ```bash

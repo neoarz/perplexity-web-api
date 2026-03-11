@@ -28,7 +28,7 @@ pub async fn search(
     let result = tokio::time::timeout(timeout, state.service.search(resolved.search_request))
         .await
         .map_err(|_| {
-            ApiError::upstream_timeout(format!("The request took longer than {timeout:?}"))
+            ApiError::upstream_timeout(format!("the request took longer than {timeout:?}"))
                 .with_pretty(pretty)
         })?
         .map_err(|err| ApiError::from_client_error(err).with_pretty(pretty))?;

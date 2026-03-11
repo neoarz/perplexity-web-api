@@ -22,9 +22,9 @@ pub async fn bearer_auth(
         .get("authorization")
         .and_then(|v| v.to_str().ok());
 
-    let Some(provided) = header.and_then(|h| h.strip_prefix("Bearer ")) else {
+    let Some(provided) = header.and_then(parse_bearer_token) else {
         return Err(
-            ApiError::unauthorized("Missing or invalid Authorization header").with_pretty(pretty),
+            ApiError::unauthorized("missing or invalid authorization header").with_pretty(pretty),
         );
     };
 
@@ -33,6 +33,15 @@ pub async fn bearer_auth(
     if is_valid {
         Ok(next.run(request).await)
     } else {
-        Err(ApiError::unauthorized("That API key doesn't match").with_pretty(pretty))
+        Err(ApiError::unauthorized("api key does not match").with_pretty(pretty))
+    }
+}
+
+fn parse_bearer_token(header: &str) -> Option<&str> {
+    let (scheme, token) = header.split_once(' ')?;
+    if scheme.eq_ignore_ascii_case("bearer") && !token.is_empty() {
+        Some(token)
+    } else {
+        None
     }
 }

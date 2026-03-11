@@ -65,6 +65,7 @@ fn model_description_search(m: &SearchModel) -> &'static str {
         SearchModel::Gpt52 => "GPT-5.2",
         SearchModel::Claude46Sonnet => "Claude 4.6 Sonnet",
         SearchModel::Grok41 => "Grok 4.1",
+        _ => "Unknown search model",
     }
 }
 
@@ -78,5 +79,6 @@ fn model_description_reason(m: &ReasonModel) -> &'static str {
         ReasonModel::Claude46SonnetThinking => "Claude 4.6 Sonnet with thinking",
         ReasonModel::Grok41Reasoning => "Grok 4.1 with reasoning",
         ReasonModel::KimiK25Thinking => "Kimi K2.5 with thinking",
+        _ => "Unknown reasoning model",
     }
 }

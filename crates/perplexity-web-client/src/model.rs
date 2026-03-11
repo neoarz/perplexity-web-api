@@ -23,6 +23,7 @@ macro_rules! define_models {
         }
     ) => {
         $(#[$enum_meta])*
+        #[non_exhaustive]
         $vis enum $name {
             $($(#[$var_meta])* $variant,)+
         }
@@ -63,7 +64,7 @@ macro_rules! define_models {
                 match s {
                     $($model_name => Ok(Self::$variant),)+
                     _ => Err(format!(
-                        "Unknown model '{s}'. Try one of: {}",
+                        "unknown model '{s}', try one of: {}",
                         Self::valid_names_csv()
                     )),
                 }
