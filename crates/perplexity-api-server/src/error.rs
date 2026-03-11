@@ -1,3 +1,4 @@
+use crate::http::response::{DEFAULT_PRETTY_JSON, serialize_json};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
@@ -18,6 +19,7 @@ pub struct ApiError {
     pub status: StatusCode,
     pub code: ErrorCode,
     pub message: String,
+    pub pretty: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -37,6 +39,7 @@ impl ApiError {
             status: StatusCode::BAD_REQUEST,
             code: ErrorCode::InvalidRequest,
             message: normalize_message(message.into()),
+            pretty: DEFAULT_PRETTY_JSON,
         }
     }
 
@@ -45,6 +48,7 @@ impl ApiError {
             status: StatusCode::BAD_REQUEST,
             code: ErrorCode::InvalidModel,
             message: normalize_message(message.into()),
+            pretty: DEFAULT_PRETTY_JSON,
         }
     }
 
@@ -53,6 +57,7 @@ impl ApiError {
             status: StatusCode::UNAUTHORIZED,
             code: ErrorCode::Unauthorized,
             message: normalize_message(message.into()),
+            pretty: DEFAULT_PRETTY_JSON,
         }
     }
 
@@ -61,6 +66,7 @@ impl ApiError {
             status: StatusCode::BAD_GATEWAY,
             code: ErrorCode::PerplexityError,
             message: normalize_message(message.into()),
+            pretty: DEFAULT_PRETTY_JSON,
         }
     }
 
@@ -69,6 +75,7 @@ impl ApiError {
             status: StatusCode::GATEWAY_TIMEOUT,
             code: ErrorCode::UpstreamTimeout,
             message: normalize_message(message.into()),
+            pretty: DEFAULT_PRETTY_JSON,
         }
     }
 
@@ -77,7 +84,13 @@ impl ApiError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             code: ErrorCode::InternalError,
             message: normalize_message(message.into()),
+            pretty: DEFAULT_PRETTY_JSON,
         }
+    }
+
+    pub fn with_pretty(mut self, pretty: bool) -> Self {
+        self.pretty = pretty;
+        self
     }
 
     pub fn from_client_error(err: perplexity_web_client::Error) -> Self {
@@ -100,11 +113,20 @@ impl ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status, axum::Json(self.body())).into_response()
+        let body = serialize_json(&self.body(), self.pretty).unwrap_or_else(|_| {
+            b"{\n  \"error\": {\n    \"code\": \"internal_error\",\n    \"message\": \"Couldn't serialize the error\"\n  }\n}\n"
+                .to_vec()
+        });
+
+        (
+            self.status,
+            [("content-type", "application/json; charset=utf-8")],
+            body,
+        )
+            .into_response()
     }
 }
 
-// A lion does concern himself with ugly error messages
 fn normalize_message(message: String) -> String {
     let mut chars = message.chars();
     let Some(first) = chars.next() else {

@@ -1,11 +1,16 @@
 use crate::api::response::{ModelDefaults, ModelInfo, ModelsApiResponse, ResearchModelInfo};
+use crate::http::response::{JsonOutputQuery, json_response};
 use crate::state::AppState;
-use axum::Json;
-use axum::extract::State;
+use axum::extract::{Query, State};
+use axum::http::StatusCode;
+use axum::response::Response;
 use perplexity_web_client::{ReasonModel, SearchModel};
 use std::sync::Arc;
 
-pub async fn list_models(State(state): State<Arc<AppState>>) -> Json<ModelsApiResponse> {
+pub async fn list_models(
+    State(state): State<Arc<AppState>>,
+    Query(output): Query<JsonOutputQuery>,
+) -> Response {
     let search_models: Vec<ModelInfo> = SearchModel::ALL
         .iter()
         .map(|m| ModelInfo {
@@ -32,18 +37,22 @@ pub async fn list_models(State(state): State<Arc<AppState>>) -> Json<ModelsApiRe
         .map(|m| m.as_str().to_string())
         .unwrap_or_else(|| "sonar-reasoning".to_string());
 
-    Json(ModelsApiResponse {
-        search: search_models,
-        reason: reason_models,
-        research: ResearchModelInfo {
-            name: "pplx_alpha",
-            description: "Fixed deep research mode",
+    json_response(
+        StatusCode::OK,
+        &ModelsApiResponse {
+            search: search_models,
+            reason: reason_models,
+            research: ResearchModelInfo {
+                name: "pplx_alpha",
+                description: "Fixed deep research mode",
+            },
+            defaults: ModelDefaults {
+                search: default_search,
+                reason: default_reason,
+            },
         },
-        defaults: ModelDefaults {
-            search: default_search,
-            reason: default_reason,
-        },
-    })
+        output.pretty_enabled(),
+    )
 }
 
 fn model_description_search(m: &SearchModel) -> &'static str {

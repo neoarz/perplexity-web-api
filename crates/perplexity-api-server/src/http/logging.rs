@@ -14,7 +14,7 @@ pub async fn request_log(request: Request, next: Next) -> Response {
 
     let response = next.run(request).await;
     let status = response.status().as_u16();
-    let should_skip = status == 200 && path == "/v1/search/stream";
+    let should_skip = status == 200 && path.starts_with("/v1/search/stream");
 
     if !should_skip {
         log_request(method.as_ref(), &path, status, started_at);

@@ -6,30 +6,58 @@ use crate::http::logging;
 use crate::http::request::parse_json_request;
 use crate::state::AppState;
 use axum::body::Bytes;
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::http::HeaderMap;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use futures_util::StreamExt;
 use futures_util::stream::BoxStream;
 use perplexity_web_client::SearchEvent;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use uuid::Uuid;
 
+#[derive(Debug, Default, Deserialize)]
+pub struct StreamOutputQuery {
+    pub human: Option<String>,
+}
+
+impl StreamOutputQuery {
+    fn human_enabled(&self) -> bool {
+        self.human.as_deref() == Some("1")
+    }
+}
+
+struct StreamContext {
+    timeout: Duration,
+    id: String,
+    mode: String,
+    model: String,
+    started_at: Instant,
+    human_output: bool,
+}
+
 pub async fn search_stream(
     State(state): State<Arc<AppState>>,
+    Query(output): Query<StreamOutputQuery>,
     headers: HeaderMap,
     body: Bytes,
 ) -> Result<Sse<impl futures_util::Stream<Item = Result<Event, Infallible>>>, ApiError> {
     let started_at = Instant::now();
-    let body: SearchApiRequest = parse_json_request(&headers, &body)?;
-    let resolved = model::resolve(body, &state)?;
-    let mode_str = resolved.mode_str.clone();
-    let model_str = resolved.model_str.clone();
+    let pretty = crate::http::response::DEFAULT_PRETTY_JSON;
+    let body: SearchApiRequest =
+        parse_json_request(&headers, &body).map_err(|err| err.with_pretty(pretty))?;
+    let resolved = model::resolve(body, &state).map_err(|err| err.with_pretty(pretty))?;
     let timeout = state.timeout_for_mode(&resolved.mode_str);
-    let id = format!("req_{}", Uuid::new_v4());
+    let context = StreamContext {
+        timeout,
+        id: format!("req_{}", Uuid::new_v4()),
+        mode: resolved.mode_str.clone(),
+        model: resolved.model_str.clone(),
+        started_at,
+        human_output: output.human_enabled(),
+    };
 
     let client_stream = tokio::time::timeout(
         timeout,
@@ -40,22 +68,14 @@ pub async fn search_stream(
         ApiError::upstream_timeout(format!(
             "Setting up the stream took longer than {timeout:?}"
         ))
+        .with_pretty(pretty)
     })?
-    .map_err(ApiError::from_client_error)?;
+    .map_err(|err| ApiError::from_client_error(err).with_pretty(pretty))?;
 
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(64);
 
     tokio::spawn(async move {
-        forward_stream(
-            tx,
-            client_stream,
-            timeout,
-            id,
-            mode_str,
-            model_str,
-            started_at,
-        )
-        .await;
+        forward_stream(tx, client_stream, context).await;
     });
 
     let stream = futures_util::stream::unfold(rx, |mut rx| async {
@@ -68,26 +88,27 @@ pub async fn search_stream(
 async fn forward_stream(
     tx: tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
     client_stream: BoxStream<'static, Result<SearchEvent, perplexity_web_client::Error>>,
-    timeout: Duration,
-    id: String,
-    mode: String,
-    model: String,
-    started_at: Instant,
+    context: StreamContext,
 ) {
     let mut stream = std::pin::pin!(client_stream);
     let mut last_event = None;
+    let mut last_message_payload: Option<String> = None;
 
     loop {
-        let next_event = tokio::time::timeout(timeout, stream.next()).await;
+        let next_event = tokio::time::timeout(context.timeout, stream.next()).await;
         let result = match next_event {
             Ok(result) => result,
             Err(_) => {
                 let _ = send_error(
                     &tx,
-                    ApiError::upstream_timeout(format!("The stream took longer than {timeout:?}")),
+                    ApiError::upstream_timeout(format!(
+                        "The stream took longer than {:?}",
+                        context.timeout
+                    )),
+                    context.human_output,
                 )
                 .await;
-                logging::log_request("POST", "/v1/search/stream", 200, started_at);
+                logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
                 return;
             }
         };
@@ -99,22 +120,32 @@ async fn forward_stream(
                     web_results: event.web_results.clone(),
                 };
 
-                match send_event(&tx, "message", &payload).await {
-                    Ok(true) => last_event = Some(event),
+                match send_message_event(
+                    &tx,
+                    &payload,
+                    context.human_output,
+                    &mut last_message_payload,
+                )
+                .await
+                {
+                    Ok(true) => {
+                        last_event = Some(event);
+                    }
                     Ok(false) => {
-                        logging::log_request("POST", "/v1/search/stream", 200, started_at);
+                        logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
                         return;
                     }
                     Err(err) => {
-                        let _ = send_error(&tx, err).await;
-                        logging::log_request("POST", "/v1/search/stream", 200, started_at);
+                        let _ = send_error(&tx, err, context.human_output).await;
+                        logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
                         return;
                     }
                 }
             }
             Some(Err(err)) => {
-                let _ = send_error(&tx, ApiError::from_client_error(err)).await;
-                logging::log_request("POST", "/v1/search/stream", 200, started_at);
+                let _ =
+                    send_error(&tx, ApiError::from_client_error(err), context.human_output).await;
+                logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
                 return;
             }
             None => break,
@@ -125,16 +156,17 @@ async fn forward_stream(
         let _ = send_error(
             &tx,
             ApiError::perplexity_error("The stream closed before any events came through"),
+            context.human_output,
         )
         .await;
-        logging::log_request("POST", "/v1/search/stream", 200, started_at);
+        logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
         return;
     };
 
     let response = SearchApiResponse {
-        id,
-        mode,
-        model,
+        id: context.id,
+        mode: context.mode,
+        model: context.model,
         answer: event.answer,
         web_results: event.web_results,
         follow_up: FollowUpResponse {
@@ -143,19 +175,46 @@ async fn forward_stream(
         },
     };
 
-    if let Err(err) = send_event(&tx, "done", &response).await {
-        let _ = send_error(&tx, err).await;
+    if let Err(err) = send_event(&tx, "done", &response, context.human_output).await {
+        let _ = send_error(&tx, err, context.human_output).await;
     }
 
-    logging::log_request("POST", "/v1/search/stream", 200, started_at);
+    logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
+}
+
+async fn send_message_event(
+    tx: &tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
+    payload: &StreamEventPayload,
+    human_output: bool,
+    last_payload: &mut Option<String>,
+) -> Result<bool, ApiError> {
+    if human_output && payload.answer.is_none() && payload.web_results.is_empty() {
+        return Ok(true);
+    }
+
+    let data = serialize_event_payload(payload, human_output, true).map_err(|err| {
+        ApiError::internal(format!("Couldn't serialize the message event: {err}"))
+    })?;
+
+    if human_output && last_payload.as_deref() == Some(data.as_str()) {
+        return Ok(true);
+    }
+
+    *last_payload = Some(data.clone());
+
+    Ok(tx
+        .send(Ok(Event::default().event("message").data(data)))
+        .await
+        .is_ok())
 }
 
 async fn send_event<T: Serialize>(
     tx: &tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
     name: &str,
     value: &T,
+    human_output: bool,
 ) -> Result<bool, ApiError> {
-    let data = serde_json::to_string(value)
+    let data = serialize_event_payload(value, human_output, false)
         .map_err(|err| ApiError::internal(format!("Couldn't serialize the {name} event: {err}")))?;
 
     Ok(tx
@@ -167,13 +226,22 @@ async fn send_event<T: Serialize>(
 async fn send_error(
     tx: &tokio::sync::mpsc::Sender<Result<Event, Infallible>>,
     error: ApiError,
+    human_output: bool,
 ) -> bool {
-    let data = match serde_json::to_string(&error.body()) {
+    let data = match if human_output {
+        serde_json::to_string_pretty(&error.body())
+    } else {
+        serde_json::to_string(&error.body())
+    } {
         Ok(data) => data,
         Err(err) => {
             let fallback =
                 ApiError::internal(format!("Couldn't serialize the error payload: {err}"));
-            match serde_json::to_string(&fallback.body()) {
+            match if human_output {
+                serde_json::to_string_pretty(&fallback.body())
+            } else {
+                serde_json::to_string(&fallback.body())
+            } {
                 Ok(data) => data,
                 Err(_) => return false,
             }
@@ -183,4 +251,25 @@ async fn send_error(
     tx.send(Ok(Event::default().event("error").data(data)))
         .await
         .is_ok()
+}
+
+fn serialize_event_payload<T>(
+    value: &T,
+    human_output: bool,
+    add_trailing_newline: bool,
+) -> Result<String, serde_json::Error>
+where
+    T: Serialize,
+{
+    let mut data = if human_output {
+        serde_json::to_string_pretty(value)?
+    } else {
+        serde_json::to_string(value)?
+    };
+
+    if human_output && add_trailing_newline {
+        data.push('\n');
+    }
+
+    Ok(data)
 }
