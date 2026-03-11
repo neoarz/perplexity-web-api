@@ -20,7 +20,6 @@ pub struct ClientBuilder {
 }
 
 impl ClientBuilder {
-    /// Starts a builder with the default timeout and no cookies
     pub fn new() -> Self {
         Self {
             cookies: None,
@@ -28,19 +27,16 @@ impl ClientBuilder {
         }
     }
 
-    /// Attaches browser cookies so the client can use your logged-in session
     pub fn cookies(mut self, cookies: AuthCookies) -> Self {
         self.cookies = Some(cookies);
         self
     }
 
-    /// Sets the timeout used for upstream requests made by this client
     pub fn timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
     }
 
-    /// Builds the client and warms up the Perplexity session once up front
     pub async fn build(self) -> Result<Client> {
         let http = session::build_http_client(self.cookies.as_ref())?;
         session::warmup(&http, self.timeout).await?;
@@ -58,7 +54,7 @@ impl Default for ClientBuilder {
     }
 }
 
-/// Thin async client around Perplexity's web search endpoints
+/// Async client around Perplexity's web search endpoints
 #[derive(Clone)]
 pub struct Client {
     http: HttpClient,
@@ -66,12 +62,10 @@ pub struct Client {
 }
 
 impl Client {
-    /// Creates a new [`ClientBuilder`]
     pub fn builder() -> ClientBuilder {
         ClientBuilder::new()
     }
 
-    /// Runs a request to completion and returns the last event as a single response
     pub async fn search(&self, request: SearchRequest) -> Result<SearchResponse> {
         let mut stream = Box::pin(self.search_stream(request).await?);
         let mut last_event: Option<SearchEvent> = None;
@@ -92,7 +86,6 @@ impl Client {
         })
     }
 
-    /// Opens the upstream SSE stream and yields progressive snapshots as they arrive
     pub async fn search_stream(
         &self,
         request: SearchRequest,
