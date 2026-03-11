@@ -7,7 +7,7 @@ pub struct SearchApiResponse {
     /// Server-generated request id
     pub id: String,
     /// Mode that was used for the request
-    pub mode: String,
+    pub mode: &'static str,
     /// Model name that actually ran
     pub model: String,
     /// Final answer text, if Perplexity returned one

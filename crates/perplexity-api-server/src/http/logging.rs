@@ -27,3 +27,13 @@ pub fn log_request(method: &str, path: &str, status: u16, started_at: Instant) {
     let elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0;
     tracing::info!("{method} {path} {status} {elapsed_ms:.2}ms");
 }
+
+pub fn log_stream_result(path: &str, started_at: Instant, outcome: &str, success: bool) {
+    let elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0;
+
+    if success {
+        tracing::info!("POST {path} 200 {elapsed_ms:.2}ms {outcome}");
+    } else {
+        tracing::warn!("POST {path} 200 {elapsed_ms:.2}ms {outcome}");
+    }
+}

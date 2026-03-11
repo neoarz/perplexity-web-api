@@ -25,7 +25,7 @@ where
     let body = match serialize_json(value, pretty) {
         Ok(body) => body,
         Err(_) => {
-            return internal_error_response("Couldn't serialize the response", pretty);
+            return internal_error_response("couldn't serialize the response", pretty);
         }
     };
 
@@ -71,7 +71,7 @@ fn internal_error_response(message: &str, pretty: bool) -> Response {
     });
 
     let body = serialize_json(&fallback, pretty).unwrap_or_else(|_| {
-        b"{\"error\":{\"code\":\"internal_error\",\"message\":\"Couldn't serialize the error\"}}\n"
+        b"{\"error\":{\"code\":\"internal_error\",\"message\":\"couldn't serialize the error\"}}\n"
             .to_vec()
     });
 

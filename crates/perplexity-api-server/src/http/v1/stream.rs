@@ -32,10 +32,16 @@ impl StreamOutputQuery {
 struct StreamContext {
     timeout: Duration,
     id: String,
-    mode: String,
+    mode: &'static str,
     model: String,
     started_at: Instant,
     human_output: bool,
+}
+
+enum MessageSendResult {
+    Emitted,
+    Suppressed,
+    ClientDisconnected,
 }
 
 pub async fn search_stream(
@@ -49,11 +55,11 @@ pub async fn search_stream(
     let body: SearchApiRequest =
         parse_json_request(&headers, &body).map_err(|err| err.with_pretty(pretty))?;
     let resolved = model::resolve(body, &state).map_err(|err| err.with_pretty(pretty))?;
-    let timeout = state.timeout_for_mode(&resolved.mode_str);
+    let timeout = state.timeout_for_mode(resolved.api_mode);
     let context = StreamContext {
         timeout,
         id: format!("req_{}", Uuid::new_v4()),
-        mode: resolved.mode_str.clone(),
+        mode: resolved.mode_str,
         model: resolved.model_str.clone(),
         started_at,
         human_output: output.human_enabled(),
@@ -108,7 +114,12 @@ async fn forward_stream(
                     context.human_output,
                 )
                 .await;
-                logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
+                logging::log_stream_result(
+                    "/v1/search/stream",
+                    context.started_at,
+                    "stream_timeout",
+                    false,
+                );
                 return;
             }
         };
@@ -128,16 +139,27 @@ async fn forward_stream(
                 )
                 .await
                 {
-                    Ok(true) => {
+                    Ok(MessageSendResult::Emitted) => {
                         last_event = Some(event);
                     }
-                    Ok(false) => {
-                        logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
+                    Ok(MessageSendResult::Suppressed) => {}
+                    Ok(MessageSendResult::ClientDisconnected) => {
+                        logging::log_stream_result(
+                            "/v1/search/stream",
+                            context.started_at,
+                            "client_disconnected",
+                            false,
+                        );
                         return;
                     }
                     Err(err) => {
                         let _ = send_error(&tx, err, context.human_output).await;
-                        logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
+                        logging::log_stream_result(
+                            "/v1/search/stream",
+                            context.started_at,
+                            "stream_error",
+                            false,
+                        );
                         return;
                     }
                 }
@@ -145,7 +167,12 @@ async fn forward_stream(
             Some(Err(err)) => {
                 let _ =
                     send_error(&tx, ApiError::from_client_error(err), context.human_output).await;
-                logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
+                logging::log_stream_result(
+                    "/v1/search/stream",
+                    context.started_at,
+                    "stream_error",
+                    false,
+                );
                 return;
             }
             None => break,
@@ -159,7 +186,12 @@ async fn forward_stream(
             context.human_output,
         )
         .await;
-        logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
+        logging::log_stream_result(
+            "/v1/search/stream",
+            context.started_at,
+            "empty_stream",
+            false,
+        );
         return;
     };
 
@@ -177,9 +209,16 @@ async fn forward_stream(
 
     if let Err(err) = send_event(&tx, "done", &response, context.human_output).await {
         let _ = send_error(&tx, err, context.human_output).await;
+        logging::log_stream_result(
+            "/v1/search/stream",
+            context.started_at,
+            "stream_error",
+            false,
+        );
+        return;
     }
 
-    logging::log_request("POST", "/v1/search/stream", 200, context.started_at);
+    logging::log_stream_result("/v1/search/stream", context.started_at, "stream_done", true);
 }
 
 async fn send_message_event(
@@ -187,9 +226,9 @@ async fn send_message_event(
     payload: &StreamEventPayload,
     human_output: bool,
     last_payload: &mut Option<String>,
-) -> Result<bool, ApiError> {
+) -> Result<MessageSendResult, ApiError> {
     if human_output && payload.answer.is_none() && payload.web_results.is_empty() {
-        return Ok(true);
+        return Ok(MessageSendResult::Suppressed);
     }
 
     let data = serialize_event_payload(payload, human_output, true).map_err(|err| {
@@ -197,15 +236,20 @@ async fn send_message_event(
     })?;
 
     if human_output && last_payload.as_deref() == Some(data.as_str()) {
-        return Ok(true);
+        return Ok(MessageSendResult::Suppressed);
     }
 
     *last_payload = Some(data.clone());
 
-    Ok(tx
+    if tx
         .send(Ok(Event::default().event("message").data(data)))
         .await
-        .is_ok())
+        .is_ok()
+    {
+        Ok(MessageSendResult::Emitted)
+    } else {
+        Ok(MessageSendResult::ClientDisconnected)
+    }
 }
 
 async fn send_event<T: Serialize>(

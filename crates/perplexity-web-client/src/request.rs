@@ -5,6 +5,7 @@ use std::str::FromStr;
 
 /// High-level mode for a Perplexity request
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum SearchMode {
     /// Uses the default search path
     #[default]
@@ -30,6 +31,7 @@ impl SearchMode {
 
 /// Source filter passed to Perplexity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum Source {
     /// General web results
     #[default]
@@ -82,6 +84,7 @@ pub struct FollowUpContext {
 
 /// Request builder for one Perplexity query
 #[derive(Debug, Clone, Default)]
+#[must_use = "builders do nothing unless consumed"]
 pub struct SearchRequest {
     /// Natural-language prompt or question
     pub query: String,

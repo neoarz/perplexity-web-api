@@ -13,6 +13,7 @@ use uuid::Uuid;
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Configures a [`Client`] before the HTTP session is created
+#[must_use = "builders do nothing unless consumed"]
 pub struct ClientBuilder {
     cookies: Option<AuthCookies>,
     timeout: Duration,

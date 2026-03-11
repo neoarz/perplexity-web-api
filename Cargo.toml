@@ -5,6 +5,8 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 rust-version = "1.85"
+license = "MIT"
+authors = ["Nazeef"]
 
 [workspace.dependencies]
 perplexity-web-client = { path = "crates/perplexity-web-client" }
@@ -33,6 +35,7 @@ subtle = "2"
 
 [workspace.lints.rust]
 unreachable_pub = "warn"
+unsafe_code = "deny"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -2 }
@@ -47,6 +50,8 @@ print_stderr = "warn"
 dbg_macro = "warn"
 
 [profile.release]
-lto = "thin"
-codegen-units = 5
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
 strip = true

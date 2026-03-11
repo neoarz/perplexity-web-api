@@ -38,7 +38,7 @@ impl ApiError {
         Self {
             status: StatusCode::BAD_REQUEST,
             code: ErrorCode::InvalidRequest,
-            message: normalize_message(message.into()),
+            message: message.into(),
             pretty: DEFAULT_PRETTY_JSON,
         }
     }
@@ -47,7 +47,7 @@ impl ApiError {
         Self {
             status: StatusCode::BAD_REQUEST,
             code: ErrorCode::InvalidModel,
-            message: normalize_message(message.into()),
+            message: message.into(),
             pretty: DEFAULT_PRETTY_JSON,
         }
     }
@@ -56,7 +56,7 @@ impl ApiError {
         Self {
             status: StatusCode::UNAUTHORIZED,
             code: ErrorCode::Unauthorized,
-            message: normalize_message(message.into()),
+            message: message.into(),
             pretty: DEFAULT_PRETTY_JSON,
         }
     }
@@ -65,7 +65,7 @@ impl ApiError {
         Self {
             status: StatusCode::BAD_GATEWAY,
             code: ErrorCode::PerplexityError,
-            message: normalize_message(message.into()),
+            message: message.into(),
             pretty: DEFAULT_PRETTY_JSON,
         }
     }
@@ -74,7 +74,7 @@ impl ApiError {
         Self {
             status: StatusCode::GATEWAY_TIMEOUT,
             code: ErrorCode::UpstreamTimeout,
-            message: normalize_message(message.into()),
+            message: message.into(),
             pretty: DEFAULT_PRETTY_JSON,
         }
     }
@@ -83,7 +83,7 @@ impl ApiError {
         Self {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             code: ErrorCode::InternalError,
-            message: normalize_message(message.into()),
+            message: message.into(),
             pretty: DEFAULT_PRETTY_JSON,
         }
     }
@@ -114,7 +114,7 @@ impl ApiError {
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let body = serialize_json(&self.body(), self.pretty).unwrap_or_else(|_| {
-            b"{\n  \"error\": {\n    \"code\": \"internal_error\",\n    \"message\": \"Couldn't serialize the error\"\n  }\n}\n"
+            b"{\n  \"error\": {\n    \"code\": \"internal_error\",\n    \"message\": \"couldn't serialize the error\"\n  }\n}\n"
                 .to_vec()
         });
 
@@ -125,16 +125,4 @@ impl IntoResponse for ApiError {
         )
             .into_response()
     }
-}
-
-fn normalize_message(message: String) -> String {
-    let mut chars = message.chars();
-    let Some(first) = chars.next() else {
-        return message;
-    };
-
-    let mut normalized = String::new();
-    normalized.extend(first.to_uppercase());
-    normalized.push_str(chars.as_str());
-    normalized
 }

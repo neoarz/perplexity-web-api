@@ -5,11 +5,12 @@ use perplexity_web_client::{
 };
 use std::sync::Arc;
 
-use super::request::{FollowUpRequest, SearchApiRequest};
+use super::request::{ApiMode, FollowUpRequest, SearchApiRequest};
 
 pub struct ResolvedQuery {
     pub search_request: SearchRequest,
-    pub mode_str: String,
+    pub api_mode: ApiMode,
+    pub mode_str: &'static str,
     pub model_str: String,
 }
 
@@ -21,7 +22,7 @@ pub fn resolve(req: SearchApiRequest, state: &Arc<AppState>) -> Result<ResolvedQ
 
     let sources = parse_sources(&req.sources)?;
     let (mode, preference, mode_str, model_str) =
-        resolve_mode_and_model(&req.mode, req.model.as_deref(), state)?;
+        resolve_mode_and_model(req.mode, req.model.as_deref(), state)?;
 
     let follow_up = req.follow_up.map(follow_up_from_request);
 
@@ -41,6 +42,7 @@ pub fn resolve(req: SearchApiRequest, state: &Arc<AppState>) -> Result<ResolvedQ
 
     Ok(ResolvedQuery {
         search_request,
+        api_mode: req.mode,
         mode_str,
         model_str,
     })
@@ -57,12 +59,12 @@ fn parse_sources(raw: &[String]) -> Result<Vec<Source>, ApiError> {
 }
 
 fn resolve_mode_and_model(
-    mode: &str,
+    mode: ApiMode,
     model: Option<&str>,
     state: &Arc<AppState>,
-) -> Result<(SearchMode, Option<ModelPreference>, String, String), ApiError> {
+) -> Result<(SearchMode, Option<ModelPreference>, &'static str, String), ApiError> {
     match mode {
-        "search" => {
+        ApiMode::Search => {
             let (pref, model_name) = match model {
                 Some(name) => {
                     let m: SearchModel = name
@@ -85,9 +87,9 @@ fn resolve_mode_and_model(
                 SearchMode::Auto
             };
 
-            Ok((search_mode, pref, "search".to_string(), model_name))
+            Ok((search_mode, pref, "search", model_name))
         }
-        "reason" => {
+        ApiMode::Reason => {
             let (pref, model_name) = match model {
                 Some(name) => {
                     let m: ReasonModel = name
@@ -101,14 +103,9 @@ fn resolve_mode_and_model(
                 },
             };
 
-            Ok((
-                SearchMode::Reasoning,
-                pref,
-                "reason".to_string(),
-                model_name,
-            ))
+            Ok((SearchMode::Reasoning, pref, "reason", model_name))
         }
-        "research" => {
+        ApiMode::Research => {
             if model.is_some() {
                 return Err(ApiError::invalid_request(
                     "Research mode doesn't take a model",
@@ -117,13 +114,10 @@ fn resolve_mode_and_model(
             Ok((
                 SearchMode::DeepResearch,
                 None,
-                "research".to_string(),
+                "research",
                 "pplx_alpha".to_string(),
             ))
         }
-        _ => Err(ApiError::invalid_request(format!(
-            "Unknown mode '{mode}'. Try search, reason, or research"
-        ))),
     }
 }
 

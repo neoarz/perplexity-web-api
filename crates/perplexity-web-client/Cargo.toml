@@ -3,7 +3,9 @@ name = "perplexity-web-client"
 description = "Async Rust client for the Perplexity AI Web API"
 version = "0.1.0"
 publish = false
-edition = { workspace = true }
+license.workspace = true
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
 tokio = { workspace = true }

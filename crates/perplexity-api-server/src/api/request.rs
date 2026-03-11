@@ -1,13 +1,32 @@
 use serde::Deserialize;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ApiMode {
+    #[default]
+    Search,
+    Reason,
+    Research,
+}
+
+impl ApiMode {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Search => "search",
+            Self::Reason => "reason",
+            Self::Research => "research",
+        }
+    }
+}
+
 /// JSON body for `POST /v1/search` and `POST /v1/search/stream`
 #[derive(Debug, Deserialize)]
 pub struct SearchApiRequest {
     /// The prompt or question to send to Perplexity
     pub query: String,
     /// Request mode: `search`, `reason`, or `research`
-    #[serde(default = "default_mode")]
-    pub mode: String,
+    #[serde(default)]
+    pub mode: ApiMode,
     /// Optional model override for the chosen mode
     #[serde(default)]
     pub model: Option<String>,
@@ -33,10 +52,6 @@ pub struct FollowUpRequest {
     /// Attachment URLs that should stay attached to the conversation
     #[serde(default)]
     pub attachments: Vec<String>,
-}
-
-fn default_mode() -> String {
-    "search".to_string()
 }
 
 fn default_sources() -> Vec<String> {

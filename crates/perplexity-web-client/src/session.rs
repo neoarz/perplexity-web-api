@@ -9,7 +9,9 @@ use std::time::Duration;
 
 pub(crate) fn build_http_client(cookies: Option<&AuthCookies>) -> Result<HttpClient> {
     let jar = Arc::new(Jar::default());
-    let url: rquest::Url = API_BASE_URL.parse().expect("API base URL should be valid");
+    let url: rquest::Url = API_BASE_URL
+        .parse()
+        .expect("BUG: API_BASE_URL is a constant and must be a valid URL");
 
     if let Some(auth) = cookies {
         for (name, value) in auth.as_pairs() {

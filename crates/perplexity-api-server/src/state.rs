@@ -1,3 +1,4 @@
+use crate::api::request::ApiMode;
 use crate::service::PerplexityService;
 use perplexity_web_client::{ReasonModel, SearchModel};
 use std::sync::Arc;
@@ -14,11 +15,11 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn timeout_for_mode(&self, mode: &str) -> Duration {
+    pub fn timeout_for_mode(&self, mode: ApiMode) -> Duration {
         match mode {
-            "reason" => self.reason_timeout,
-            "research" => self.research_timeout,
-            _ => self.search_timeout,
+            ApiMode::Reason => self.reason_timeout,
+            ApiMode::Research => self.research_timeout,
+            ApiMode::Search => self.search_timeout,
         }
     }
 }

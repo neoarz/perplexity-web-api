@@ -23,7 +23,7 @@ pub async fn search(
     let body: SearchApiRequest =
         parse_json_request(&headers, &body).map_err(|err| err.with_pretty(pretty))?;
     let resolved = model::resolve(body, &state).map_err(|err| err.with_pretty(pretty))?;
-    let timeout = state.timeout_for_mode(&resolved.mode_str);
+    let timeout = state.timeout_for_mode(resolved.api_mode);
 
     let result = tokio::time::timeout(timeout, state.service.search(resolved.search_request))
         .await
