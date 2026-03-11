@@ -8,6 +8,7 @@ RUN apt-get update \
         ca-certificates \
         clang \
         cmake \
+        git \
         pkg-config \
         perl \
     && rm -rf /var/lib/apt/lists/*
