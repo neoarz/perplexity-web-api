@@ -93,6 +93,7 @@ define_models! {
         SonarReasoning => { name: "sonar-reasoning", preference: "pplx_reasoning" },
         Gemini30FlashThinking => { name: "gemini-3-flash-thinking", preference: "gemini30flash_high" },
         Gemini31Pro => { name: "gemini-3.1-pro", preference: "gemini31pro_high" },
+        Nemotron3SuperThinking => { name: "nemotron-3-super-thinking", preference: "nv_nemotron_3_super" },
         Gpt54Thinking => { name: "gpt-5.4-thinking", preference: "gpt54_thinking" },
         Gpt52Thinking => { name: "gpt-5.2-thinking", preference: "gpt52_thinking" },
         Claude46SonnetThinking => { name: "claude-4.6-sonnet-thinking", preference: "claude46sonnetthinking" },

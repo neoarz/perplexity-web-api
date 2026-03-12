@@ -74,6 +74,7 @@ fn model_description_reason(m: &ReasonModel) -> &'static str {
         ReasonModel::SonarReasoning => "Default reasoning model",
         ReasonModel::Gemini30FlashThinking => "Gemini 3.0 Flash with thinking",
         ReasonModel::Gemini31Pro => "Gemini 3.1 Pro",
+        ReasonModel::Nemotron3SuperThinking => "Nemotron 3 Super with thinking",
         ReasonModel::Gpt54Thinking => "GPT-5.4 with thinking",
         ReasonModel::Gpt52Thinking => "GPT-5.2 with thinking",
         ReasonModel::Claude46SonnetThinking => "Claude 4.6 Sonnet with thinking",
