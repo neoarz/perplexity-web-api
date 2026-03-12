@@ -100,6 +100,7 @@ cargo run -p perplexity-api-server
 | `turbo` | `sonar-reasoning` |
 | `sonar` | `gemini-3-flash-thinking` |
 | `sonar-pro` | `gemini-3.1-pro` |
+| `nemotron-3-super-thinking` |
 | `gemini-3-flash` | `gpt-5.4-thinking` |
 | `gpt-5.4` | `gpt-5.2-thinking` |
 | `gpt-5.2` | `claude-4.6-sonnet-thinking` |
