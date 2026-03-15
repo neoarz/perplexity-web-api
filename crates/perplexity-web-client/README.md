@@ -52,9 +52,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `Source` | source filter enum used by `SearchRequest` |
 | `SearchEvent` | one parsed event from the SSE stream |
 | `SearchResponse` | final normalized response returned by `Client::search()` |
+| `GeneratedImage` | one generated image asset extracted from the upstream stream |
 
 ## Notes
 
 - This crate uses Perplexity browser session cookies, not the official Perplexity API.
 - `Client::search()` returns the final normalized response.
 - `Client::search_stream()` returns progressive snapshots from the SSE stream.
+- `SearchEvent` and `SearchResponse` now include `image_generation` and `generated_images` when Perplexity returns generated image assets.

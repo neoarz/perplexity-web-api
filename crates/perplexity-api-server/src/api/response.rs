@@ -1,4 +1,4 @@
-use perplexity_web_client::SearchWebResult;
+use perplexity_web_client::{GeneratedImage, SearchWebResult};
 use serde::Serialize;
 
 /// Response body returned by `POST /v1/search`
@@ -25,6 +25,58 @@ pub struct FollowUpResponse {
     pub backend_uuid: Option<String>,
     /// Attachments that should carry into the next turn
     pub attachments: Vec<String>,
+}
+
+/// One generated image returned by `POST /v1/images`
+#[derive(Debug, Serialize)]
+pub struct GeneratedImageResponse {
+    /// Direct image URL
+    pub url: String,
+    /// Smaller preview URL, if Perplexity returned one
+    pub thumbnail_url: Option<String>,
+    /// Download URL, if Perplexity returned one
+    pub download_url: Option<String>,
+    /// MIME type, if Perplexity returned one
+    pub mime_type: Option<String>,
+    /// Upstream image source or router name
+    pub source: Option<String>,
+    /// Upstream generation model name
+    pub generation_model: Option<String>,
+    /// Prompt or prompt-like description of the generated image
+    pub prompt: Option<String>,
+}
+
+impl From<GeneratedImage> for GeneratedImageResponse {
+    fn from(image: GeneratedImage) -> Self {
+        Self {
+            url: image.url,
+            thumbnail_url: image.thumbnail_url,
+            download_url: image.download_url,
+            mime_type: image.mime_type,
+            source: image.source,
+            generation_model: image.generation_model,
+            prompt: image.prompt,
+        }
+    }
+}
+
+/// Response body returned by `POST /v1/images`
+#[derive(Debug, Serialize)]
+pub struct ImageApiResponse {
+    /// Server-generated request id
+    pub id: String,
+    /// Model name that actually ran
+    pub model: String,
+    /// Original generation prompt
+    pub prompt: String,
+    /// Whether the upstream request produced generated images
+    pub image_generation: bool,
+    /// Generated image assets returned by Perplexity
+    pub images: Vec<GeneratedImageResponse>,
+    /// Final answer text, if Perplexity returned one
+    pub answer: Option<String>,
+    /// Values the caller can reuse for a follow-up request
+    pub follow_up: FollowUpResponse,
 }
 
 /// Response body returned by `GET /v1/models`

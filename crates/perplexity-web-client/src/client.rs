@@ -2,7 +2,7 @@ use crate::auth::AuthCookies;
 use crate::config::{API_BASE_URL, API_VERSION, ENDPOINT_SSE_ASK, MODE_CONCISE, MODE_COPILOT};
 use crate::error::{Error, Result};
 use crate::request::{AskParams, AskPayload, SearchMode, SearchRequest};
-use crate::response::{SearchEvent, SearchResponse};
+use crate::response::{GeneratedImage, SearchEvent, SearchResponse};
 use crate::session;
 use crate::sse::SseStream;
 use futures_util::{Stream, StreamExt};
@@ -68,22 +68,13 @@ impl Client {
 
     pub async fn search(&self, request: SearchRequest) -> Result<SearchResponse> {
         let mut stream = Box::pin(self.search_stream(request).await?);
-        let mut last_event: Option<SearchEvent> = None;
+        let mut accumulator = SearchAccumulator::default();
 
         while let Some(result) = stream.next().await {
-            last_event = Some(result?);
+            accumulator.push(result?);
         }
 
-        let event = last_event.ok_or(Error::UnexpectedEndOfStream)?;
-        let raw = serde_json::to_value(&event).map_err(Error::Json)?;
-        let follow_up = event.as_follow_up();
-
-        Ok(SearchResponse {
-            answer: event.answer,
-            web_results: event.web_results,
-            follow_up,
-            raw,
-        })
+        accumulator.finish()
     }
 
     pub async fn search_stream(
@@ -142,5 +133,66 @@ impl Client {
             })?;
 
         Ok(SseStream::new(response.bytes_stream()))
+    }
+}
+
+#[derive(Default)]
+struct SearchAccumulator {
+    last_event: Option<SearchEvent>,
+    image_generation: bool,
+    generated_images: Vec<GeneratedImage>,
+}
+
+impl SearchAccumulator {
+    fn push(&mut self, mut event: SearchEvent) {
+        self.image_generation |= event.image_generation;
+        merge_generated_images(
+            &mut self.generated_images,
+            std::mem::take(&mut event.generated_images),
+        );
+        self.last_event = Some(event);
+    }
+
+    fn finish(self) -> Result<SearchResponse> {
+        let mut event = self.last_event.ok_or(Error::UnexpectedEndOfStream)?;
+        merge_generated_images(&mut event.generated_images, self.generated_images);
+        event.image_generation |= self.image_generation || !event.generated_images.is_empty();
+
+        let raw = serde_json::to_value(&event).map_err(Error::Json)?;
+        let follow_up = event.as_follow_up();
+
+        Ok(SearchResponse {
+            answer: event.answer,
+            web_results: event.web_results,
+            image_generation: event.image_generation,
+            generated_images: event.generated_images,
+            follow_up,
+            raw,
+        })
+    }
+}
+
+fn merge_generated_images(existing: &mut Vec<GeneratedImage>, incoming: Vec<GeneratedImage>) {
+    for image in incoming {
+        if let Some(current) = existing.iter_mut().find(|current| current.url == image.url) {
+            merge_generated_image(current, image);
+        } else {
+            existing.push(image);
+        }
+    }
+}
+
+fn merge_generated_image(existing: &mut GeneratedImage, incoming: GeneratedImage) {
+    merge_optional_field(&mut existing.thumbnail_url, incoming.thumbnail_url);
+    merge_optional_field(&mut existing.download_url, incoming.download_url);
+    merge_optional_field(&mut existing.mime_type, incoming.mime_type);
+    merge_optional_field(&mut existing.source, incoming.source);
+    merge_optional_field(&mut existing.generation_model, incoming.generation_model);
+    merge_optional_field(&mut existing.prompt, incoming.prompt);
+}
+
+fn merge_optional_field(slot: &mut Option<String>, incoming: Option<String>) {
+    if slot.is_none() {
+        *slot = incoming;
     }
 }

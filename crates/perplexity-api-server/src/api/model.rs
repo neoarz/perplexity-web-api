@@ -5,16 +5,25 @@ use perplexity_web_client::{
 };
 use std::sync::Arc;
 
-use super::request::{ApiMode, FollowUpRequest, SearchApiRequest};
+use super::request::{ApiMode, FollowUpRequest, ImageApiRequest, SearchApiRequest};
 
-pub struct ResolvedQuery {
+pub(crate) struct ResolvedQuery {
     pub search_request: SearchRequest,
     pub api_mode: ApiMode,
     pub mode_str: &'static str,
     pub model_str: String,
 }
 
-pub fn resolve(req: SearchApiRequest, state: &Arc<AppState>) -> Result<ResolvedQuery, ApiError> {
+pub(crate) struct ResolvedImageRequest {
+    pub search_request: SearchRequest,
+    pub prompt: String,
+    pub model_str: String,
+}
+
+pub(crate) fn resolve(
+    req: SearchApiRequest,
+    state: &Arc<AppState>,
+) -> Result<ResolvedQuery, ApiError> {
     let query = req.query.trim().to_string();
     if query.is_empty() {
         return Err(ApiError::invalid_request("query can't be empty"));
@@ -48,6 +57,31 @@ pub fn resolve(req: SearchApiRequest, state: &Arc<AppState>) -> Result<ResolvedQ
     })
 }
 
+pub(crate) fn resolve_image_request(
+    req: ImageApiRequest,
+    state: &Arc<AppState>,
+) -> Result<ResolvedImageRequest, ApiError> {
+    let prompt = req.prompt.trim().to_string();
+    if prompt.is_empty() {
+        return Err(ApiError::invalid_request("prompt can't be empty"));
+    }
+
+    let (mode, preference, model_str) = resolve_search_model(req.model.as_deref(), state)?;
+
+    let search_request = SearchRequest::new(prompt.clone())
+        .mode(mode)
+        .model(preference)
+        .sources(vec![Source::Web])
+        .language(req.language)
+        .incognito(req.incognito);
+
+    Ok(ResolvedImageRequest {
+        search_request,
+        prompt,
+        model_str,
+    })
+}
+
 fn parse_sources(raw: &[String]) -> Result<Vec<Source>, ApiError> {
     if raw.is_empty() {
         return Ok(vec![Source::Web]);
@@ -65,29 +99,9 @@ fn resolve_mode_and_model(
 ) -> Result<(SearchMode, Option<ModelPreference>, &'static str, String), ApiError> {
     match mode {
         ApiMode::Search => {
-            let (pref, model_name) = match model {
-                Some(name) => {
-                    let m: SearchModel = name
-                        .parse()
-                        .map_err(|e: String| ApiError::invalid_model(e))?;
-                    (Some(m.preference()), m.as_str().to_string())
-                }
-                None => match state.default_search_model {
-                    Some(m) => (Some(m.preference()), m.as_str().to_string()),
-                    None => (
-                        Some(SearchModel::Sonar.preference()),
-                        SearchModel::Sonar.as_str().to_string(),
-                    ),
-                },
-            };
+            let (search_mode, pref, model_name) = resolve_search_model(model, state)?;
 
-            let search_mode = if pref.is_some() && pref.map(|p| p.as_str()) != Some("turbo") {
-                SearchMode::Pro
-            } else {
-                SearchMode::Auto
-            };
-
-            Ok((search_mode, pref, "search", model_name))
+            Ok((search_mode, Some(pref), "search", model_name))
         }
         ApiMode::Reason => {
             let (pref, model_name) = match model {
@@ -126,4 +140,24 @@ fn follow_up_from_request(req: FollowUpRequest) -> FollowUpContext {
         backend_uuid: req.backend_uuid,
         attachments: req.attachments,
     }
+}
+
+fn resolve_search_model(
+    model: Option<&str>,
+    state: &Arc<AppState>,
+) -> Result<(SearchMode, ModelPreference, String), ApiError> {
+    let model = match model {
+        Some(name) => name
+            .parse::<SearchModel>()
+            .map_err(ApiError::invalid_model)?,
+        None => state.default_search_model.unwrap_or(SearchModel::Sonar),
+    };
+
+    let mode = if model == SearchModel::Turbo {
+        SearchMode::Auto
+    } else {
+        SearchMode::Pro
+    };
+
+    Ok((mode, model.preference(), model.as_str().to_string()))
 }

@@ -54,6 +54,22 @@ pub struct FollowUpRequest {
     pub attachments: Vec<String>,
 }
 
+/// JSON body for `POST /v1/images`
+#[derive(Debug, Deserialize)]
+pub struct ImageApiRequest {
+    /// The image generation prompt to send to Perplexity
+    pub prompt: String,
+    /// Optional search-model override
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Language code sent upstream
+    #[serde(default = "default_language")]
+    pub language: String,
+    /// Whether to ask Perplexity in incognito mode
+    #[serde(default = "default_incognito")]
+    pub incognito: bool,
+}
+
 fn default_sources() -> Vec<String> {
     vec!["web".to_string()]
 }

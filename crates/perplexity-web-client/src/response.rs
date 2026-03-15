@@ -3,6 +3,31 @@ use std::collections::HashMap;
 
 use crate::request::FollowUpContext;
 
+/// One generated image returned by Perplexity.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GeneratedImage {
+    /// Direct image URL
+    pub url: String,
+    /// Smaller preview URL, if Perplexity returned one
+    #[serde(default)]
+    pub thumbnail_url: Option<String>,
+    /// Download URL, if Perplexity returned one
+    #[serde(default)]
+    pub download_url: Option<String>,
+    /// MIME type, if Perplexity returned one
+    #[serde(default)]
+    pub mime_type: Option<String>,
+    /// Upstream image source or router name
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Upstream generation model name
+    #[serde(default)]
+    pub generation_model: Option<String>,
+    /// Prompt or prompt-like description of the generated image
+    #[serde(default)]
+    pub prompt: Option<String>,
+}
+
 /// One parsed event from Perplexity's SSE stream.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchEvent {
@@ -18,6 +43,12 @@ pub struct SearchEvent {
     /// Attachments carried by this event
     #[serde(default)]
     pub attachments: Vec<String>,
+    /// Whether this event indicates image generation
+    #[serde(default)]
+    pub image_generation: bool,
+    /// Generated images carried by this event
+    #[serde(default)]
+    pub generated_images: Vec<GeneratedImage>,
     /// Everything else from the raw event payload
     #[serde(flatten)]
     pub raw: HashMap<String, serde_json::Value>,
@@ -50,6 +81,10 @@ pub struct SearchResponse {
     pub answer: Option<String>,
     /// Final source list
     pub web_results: Vec<SearchWebResult>,
+    /// Whether the upstream request generated images
+    pub image_generation: bool,
+    /// Final generated image list
+    pub generated_images: Vec<GeneratedImage>,
     /// Values you can feed into the next request to continue the thread
     pub follow_up: FollowUpContext,
     /// Raw data from the last event after normalization

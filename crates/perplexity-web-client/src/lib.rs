@@ -19,4 +19,4 @@ pub use client::{Client, ClientBuilder};
 pub use error::{Error, Result};
 pub use model::{ModelPreference, ReasonModel, SearchModel};
 pub use request::{FollowUpContext, SearchMode, SearchRequest, Source};
-pub use response::{SearchEvent, SearchResponse, SearchWebResult};
+pub use response::{GeneratedImage, SearchEvent, SearchResponse, SearchWebResult};
