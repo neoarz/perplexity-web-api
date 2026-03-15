@@ -9,6 +9,9 @@ use axum::response::Response;
 use perplexity_web_client::UploadAttachment;
 use std::sync::Arc;
 
+const MAX_UPLOAD_FILES: usize = 10;
+const MAX_FILE_SIZE: usize = 10 * 1024 * 1024;
+
 pub async fn upload_attachments(
     State(state): State<Arc<AppState>>,
     Query(output): Query<JsonOutputQuery>,
@@ -57,6 +60,12 @@ async fn collect_upload_attachments(
         .await
         .map_err(|err| ApiError::invalid_request(format!("couldn't read multipart data: {err}")))?
     {
+        if attachments.len() >= MAX_UPLOAD_FILES {
+            return Err(ApiError::invalid_request(format!(
+                "at most {MAX_UPLOAD_FILES} files are allowed"
+            )));
+        }
+
         let Some(name) = field.name() else {
             return Err(ApiError::invalid_request("multipart field name is missing"));
         };
@@ -73,9 +82,7 @@ async fn collect_upload_attachments(
         };
         let declared_content_type = field.content_type().map(ToString::to_string);
 
-        let bytes = field.bytes().await.map_err(|err| {
-            ApiError::invalid_request(format!("couldn't read uploaded file '{filename}': {err}"))
-        })?;
+        let bytes = read_bounded_file_bytes(field, &filename).await?;
         if bytes.is_empty() {
             return Err(ApiError::invalid_request(format!(
                 "uploaded file '{filename}' is empty"
@@ -88,6 +95,27 @@ async fn collect_upload_attachments(
     }
 
     Ok(attachments)
+}
+
+async fn read_bounded_file_bytes(
+    mut field: axum::extract::multipart::Field<'_>,
+    filename: &str,
+) -> Result<Vec<u8>, ApiError> {
+    let mut bytes = Vec::new();
+
+    while let Some(chunk) = field.chunk().await.map_err(|err| {
+        ApiError::invalid_request(format!("couldn't read uploaded file '{filename}': {err}"))
+    })? {
+        if bytes.len().saturating_add(chunk.len()) > MAX_FILE_SIZE {
+            return Err(ApiError::invalid_request(format!(
+                "uploaded file '{filename}' exceeds the {MAX_FILE_SIZE}-byte limit"
+            )));
+        }
+
+        bytes.extend_from_slice(&chunk);
+    }
+
+    Ok(bytes)
 }
 
 fn resolve_image_content_type(

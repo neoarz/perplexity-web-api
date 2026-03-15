@@ -157,8 +157,12 @@ Send `multipart/form-data` with repeated `files` fields.
 | repeated fields | use repeated `files` parts |
 | file order | preserved |
 | MIME detection | server validates the actual file bytes and normalizes the upload MIME type |
+| max files per request | `10` |
+| max file size | `10 MB` per file |
 | empty files | rejected |
 | unsupported MIME types | rejected |
+
+For whole-request protection, configure router-level `DefaultBodyLimit` or `RequestBodyLimitLayer` separately.
 
 ### Response shape
 

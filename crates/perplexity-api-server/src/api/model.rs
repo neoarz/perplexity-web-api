@@ -43,15 +43,19 @@ pub(crate) fn resolve(
 
     let sources = parse_sources(&sources)?;
     let attachments = dedupe_attachments(attachments);
-    if !attachments.is_empty() && api_mode != ApiMode::Search {
+    let follow_up = merge_follow_up_attachments(follow_up, attachments);
+    if api_mode != ApiMode::Search
+        && follow_up
+            .as_ref()
+            .is_some_and(|ctx| !ctx.attachments.is_empty())
+    {
         return Err(ApiError::invalid_request(
             "attachments are only supported in search mode",
         ));
     }
+
     let (mode, preference, mode_str, model_str) =
         resolve_mode_and_model(api_mode, model.as_deref(), state)?;
-
-    let follow_up = merge_follow_up_attachments(follow_up, attachments);
 
     let mut search_request = SearchRequest::new(query)
         .mode(mode)

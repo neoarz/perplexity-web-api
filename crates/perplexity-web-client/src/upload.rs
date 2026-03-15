@@ -12,11 +12,15 @@ pub struct UploadAttachment {
 }
 
 impl UploadAttachment {
-    pub fn new(filename: impl Into<String>, content_type: impl Into<String>, bytes: Bytes) -> Self {
+    pub fn new(
+        filename: impl Into<String>,
+        content_type: impl Into<String>,
+        bytes: impl Into<Bytes>,
+    ) -> Self {
         Self {
             filename: filename.into(),
             content_type: content_type.into(),
-            bytes,
+            bytes: bytes.into(),
         }
     }
 
