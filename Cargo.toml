@@ -20,7 +20,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid = { version = "1", features = ["v4"] }
 futures-util = "0.3"
 
-rquest = { version = "5.1", features = ["cookies", "json", "stream"] }
+rquest = { version = "5.1", features = ["cookies", "json", "multipart", "stream"] }
 rquest-util = "2.2"
 bytes = "1"
 memchr = "2"
@@ -28,10 +28,11 @@ regex = "1"
 pin-project-lite = "0.2"
 
 dotenvy = "0.15"
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["cors"] }
 subtle = "2"
+infer = "0.19"
 
 [workspace.lints.rust]
 unreachable_pub = "warn"

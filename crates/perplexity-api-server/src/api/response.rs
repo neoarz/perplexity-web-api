@@ -1,4 +1,4 @@
-use perplexity_web_client::{GeneratedImage, SearchWebResult};
+use perplexity_web_client::{GeneratedImage, SearchWebResult, UploadedAttachment};
 use serde::Serialize;
 
 /// Response body returned by `POST /v1/search`
@@ -25,6 +25,40 @@ pub struct FollowUpResponse {
     pub backend_uuid: Option<String>,
     /// Attachments that should carry into the next turn
     pub attachments: Vec<String>,
+}
+
+/// One uploaded attachment returned by `POST /v1/attachments`
+#[derive(Debug, Serialize)]
+pub struct UploadedAttachmentResponse {
+    /// Direct attachment URL to send back into `/v1/search.attachments`
+    pub url: String,
+    /// Upstream Perplexity file uuid
+    pub file_uuid: String,
+    /// Original filename
+    pub filename: String,
+    /// MIME type used for the upload
+    pub content_type: String,
+    /// File size in bytes
+    pub size_bytes: usize,
+}
+
+impl From<UploadedAttachment> for UploadedAttachmentResponse {
+    fn from(attachment: UploadedAttachment) -> Self {
+        Self {
+            url: attachment.url,
+            file_uuid: attachment.file_uuid,
+            filename: attachment.filename,
+            content_type: attachment.content_type,
+            size_bytes: attachment.size_bytes,
+        }
+    }
+}
+
+/// Response body returned by `POST /v1/attachments`
+#[derive(Debug, Serialize)]
+pub struct AttachmentUploadApiResponse {
+    /// Uploaded attachments in request order
+    pub attachments: Vec<UploadedAttachmentResponse>,
 }
 
 /// One generated image returned by `POST /v1/images`

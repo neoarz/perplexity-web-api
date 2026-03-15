@@ -3,6 +3,7 @@ use crate::state::AppState;
 use perplexity_web_client::{
     FollowUpContext, ModelPreference, ReasonModel, SearchMode, SearchModel, SearchRequest, Source,
 };
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use super::request::{ApiMode, FollowUpRequest, ImageApiRequest, SearchApiRequest};
@@ -24,22 +25,39 @@ pub(crate) fn resolve(
     req: SearchApiRequest,
     state: &Arc<AppState>,
 ) -> Result<ResolvedQuery, ApiError> {
-    let query = req.query.trim().to_string();
+    let SearchApiRequest {
+        query,
+        mode: api_mode,
+        model,
+        sources,
+        language,
+        incognito,
+        attachments,
+        follow_up,
+    } = req;
+
+    let query = query.trim().to_string();
     if query.is_empty() {
         return Err(ApiError::invalid_request("query can't be empty"));
     }
 
-    let sources = parse_sources(&req.sources)?;
+    let sources = parse_sources(&sources)?;
+    let attachments = dedupe_attachments(attachments);
+    if !attachments.is_empty() && api_mode != ApiMode::Search {
+        return Err(ApiError::invalid_request(
+            "attachments are only supported in search mode",
+        ));
+    }
     let (mode, preference, mode_str, model_str) =
-        resolve_mode_and_model(req.mode, req.model.as_deref(), state)?;
+        resolve_mode_and_model(api_mode, model.as_deref(), state)?;
 
-    let follow_up = req.follow_up.map(follow_up_from_request);
+    let follow_up = merge_follow_up_attachments(follow_up, attachments);
 
     let mut search_request = SearchRequest::new(query)
         .mode(mode)
         .sources(sources)
-        .language(req.language)
-        .incognito(req.incognito);
+        .language(language)
+        .incognito(incognito);
 
     if let Some(pref) = preference {
         search_request = search_request.model(pref);
@@ -51,7 +69,7 @@ pub(crate) fn resolve(
 
     Ok(ResolvedQuery {
         search_request,
-        api_mode: req.mode,
+        api_mode,
         mode_str,
         model_str,
     })
@@ -135,13 +153,6 @@ fn resolve_mode_and_model(
     }
 }
 
-fn follow_up_from_request(req: FollowUpRequest) -> FollowUpContext {
-    FollowUpContext {
-        backend_uuid: req.backend_uuid,
-        attachments: req.attachments,
-    }
-}
-
 fn resolve_search_model(
     model: Option<&str>,
     state: &Arc<AppState>,
@@ -160,4 +171,47 @@ fn resolve_search_model(
     };
 
     Ok((mode, model.preference(), model.as_str().to_string()))
+}
+
+fn merge_follow_up_attachments(
+    follow_up: Option<FollowUpRequest>,
+    attachments: Vec<String>,
+) -> Option<FollowUpContext> {
+    let Some(follow_up) = follow_up else {
+        return (!attachments.is_empty()).then_some(FollowUpContext {
+            backend_uuid: None,
+            attachments,
+        });
+    };
+
+    let merged = dedupe_attachments(
+        follow_up
+            .attachments
+            .into_iter()
+            .chain(attachments)
+            .collect(),
+    );
+
+    Some(FollowUpContext {
+        backend_uuid: follow_up.backend_uuid,
+        attachments: merged,
+    })
+}
+
+fn dedupe_attachments(attachments: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+
+    for attachment in attachments {
+        let attachment = attachment.trim();
+        if attachment.is_empty() {
+            continue;
+        }
+
+        if seen.insert(attachment.to_string()) {
+            deduped.push(attachment.to_string());
+        }
+    }
+
+    deduped
 }

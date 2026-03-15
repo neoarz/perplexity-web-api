@@ -13,6 +13,7 @@ mod request;
 mod response;
 mod session;
 mod sse;
+mod upload;
 
 pub use auth::{AuthCookies, CSRF_TOKEN_COOKIE, SESSION_TOKEN_COOKIE};
 pub use client::{Client, ClientBuilder};
@@ -20,3 +21,4 @@ pub use error::{Error, Result};
 pub use model::{ModelPreference, ReasonModel, SearchModel};
 pub use request::{FollowUpContext, SearchMode, SearchRequest, Source};
 pub use response::{GeneratedImage, SearchEvent, SearchResponse, SearchWebResult};
+pub use upload::{UploadAttachment, UploadedAttachment};

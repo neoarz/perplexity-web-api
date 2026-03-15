@@ -39,6 +39,9 @@ pub struct SearchApiRequest {
     /// Whether to ask Perplexity in incognito mode
     #[serde(default = "default_incognito")]
     pub incognito: bool,
+    /// Top-level attachment URLs for the request
+    #[serde(default)]
+    pub attachments: Vec<String>,
     /// Follow-up data from an earlier response
     #[serde(default)]
     pub follow_up: Option<FollowUpRequest>,

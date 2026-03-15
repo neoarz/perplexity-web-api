@@ -2,13 +2,19 @@ use futures_util::StreamExt;
 use futures_util::future::BoxFuture;
 use futures_util::stream::BoxStream;
 use perplexity_web_client::{
-    Client, Error as ClientError, SearchEvent, SearchRequest, SearchResponse,
+    Client, Error as ClientError, SearchEvent, SearchRequest, SearchResponse, UploadAttachment,
+    UploadedAttachment,
 };
 
 pub type ClientResult<T> = Result<T, ClientError>;
 
 pub trait PerplexityService: Send + Sync {
     fn search(&self, request: SearchRequest) -> BoxFuture<'_, ClientResult<SearchResponse>>;
+
+    fn upload_attachments(
+        &self,
+        attachments: Vec<UploadAttachment>,
+    ) -> BoxFuture<'_, ClientResult<Vec<UploadedAttachment>>>;
 
     fn search_stream(
         &self,
@@ -19,6 +25,13 @@ pub trait PerplexityService: Send + Sync {
 impl PerplexityService for Client {
     fn search(&self, request: SearchRequest) -> BoxFuture<'_, ClientResult<SearchResponse>> {
         Box::pin(async move { Client::search(self, request).await })
+    }
+
+    fn upload_attachments(
+        &self,
+        attachments: Vec<UploadAttachment>,
+    ) -> BoxFuture<'_, ClientResult<Vec<UploadedAttachment>>> {
+        Box::pin(async move { Client::upload_attachments(self, attachments).await })
     }
 
     fn search_stream(

@@ -1,12 +1,21 @@
 use crate::auth::AuthCookies;
-use crate::config::{API_BASE_URL, API_VERSION, ENDPOINT_SSE_ASK, MODE_CONCISE, MODE_COPILOT};
+use crate::config::{
+    API_BASE_URL, API_VERSION, ENDPOINT_BATCH_CREATE_UPLOAD_URLS, ENDPOINT_SSE_ASK, MODE_CONCISE,
+    MODE_COPILOT,
+};
 use crate::error::{Error, Result};
 use crate::request::{AskParams, AskPayload, SearchMode, SearchRequest};
 use crate::response::{GeneratedImage, SearchEvent, SearchResponse};
 use crate::session;
 use crate::sse::SseStream;
+use crate::upload::{
+    BatchCreateUploadUrlsRequest, BatchCreateUploadUrlsResponse, CreateUploadUrlRequest,
+    StorageUploadResponse, UploadAttachment, UploadedAttachment, fallback_asset_url,
+};
 use futures_util::{Stream, StreamExt};
 use rquest::Client as HttpClient;
+use rquest::multipart::{Form, Part};
+use std::collections::BTreeMap;
 use std::time::Duration;
 use uuid::Uuid;
 
@@ -134,6 +143,151 @@ impl Client {
 
         Ok(SseStream::new(response.bytes_stream()))
     }
+
+    pub async fn upload_attachments(
+        &self,
+        attachments: Vec<UploadAttachment>,
+    ) -> Result<Vec<UploadedAttachment>> {
+        if attachments.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let upload_urls = self.request_upload_urls(&attachments).await?;
+        let mut uploaded = Vec::with_capacity(attachments.len());
+
+        for (index, attachment) in attachments.into_iter().enumerate() {
+            let key = upload_key(index);
+            let upload = upload_urls
+                .results
+                .get(&key)
+                .ok_or_else(|| Error::InvalidUploadResponse(format!("result for '{key}'")))?;
+
+            if let Some(error) = &upload.error {
+                return Err(Error::UploadRejected(error.clone()));
+            }
+
+            if upload.rate_limited {
+                return Err(Error::UploadRejected("rate_limited".to_string()));
+            }
+
+            let file_uuid = upload
+                .file_uuid
+                .as_deref()
+                .ok_or_else(|| Error::InvalidUploadResponse("file_uuid".to_string()))?;
+            let s3_bucket_url = upload
+                .s3_bucket_url
+                .as_deref()
+                .ok_or_else(|| Error::InvalidUploadResponse("s3_bucket_url".to_string()))?;
+            let fields = upload
+                .fields
+                .as_ref()
+                .ok_or_else(|| Error::InvalidUploadResponse("fields".to_string()))?;
+
+            let url = self
+                .upload_attachment_to_storage(&attachment, s3_bucket_url, fields)
+                .await?;
+
+            let size_bytes = attachment.size_bytes();
+            uploaded.push(UploadedAttachment {
+                url,
+                file_uuid: file_uuid.to_string(),
+                filename: attachment.filename,
+                content_type: attachment.content_type,
+                size_bytes,
+            });
+        }
+
+        Ok(uploaded)
+    }
+
+    async fn request_upload_urls(
+        &self,
+        attachments: &[UploadAttachment],
+    ) -> Result<BatchCreateUploadUrlsResponse> {
+        let files = attachments
+            .iter()
+            .enumerate()
+            .map(|(index, attachment)| {
+                (
+                    upload_key(index),
+                    CreateUploadUrlRequest::from_attachment(attachment),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        let payload = BatchCreateUploadUrlsRequest { files };
+
+        let request_fut = self
+            .http
+            .post(format!("{API_BASE_URL}{ENDPOINT_BATCH_CREATE_UPLOAD_URLS}"))
+            .json(&payload)
+            .send();
+
+        let response = tokio::time::timeout(self.timeout, request_fut)
+            .await
+            .map_err(|_| Error::Timeout(self.timeout))?
+            .map_err(Error::AttachmentUploadRequest)?
+            .error_for_status()
+            .map_err(|e| Error::Server {
+                status: e.status().map(|s| s.as_u16()).unwrap_or(0),
+                message: e.to_string(),
+            })?;
+
+        let body = response
+            .text()
+            .await
+            .map_err(Error::AttachmentUploadRequest)?;
+        serde_json::from_str(&body).map_err(Error::Json)
+    }
+
+    async fn upload_attachment_to_storage(
+        &self,
+        attachment: &UploadAttachment,
+        s3_bucket_url: &str,
+        fields: &BTreeMap<String, String>,
+    ) -> Result<String> {
+        let key = fields
+            .get("key")
+            .ok_or_else(|| Error::InvalidUploadResponse("fields.key".to_string()))?;
+
+        let mut form = Form::new();
+        for (field, value) in fields {
+            form = form.text(field.clone(), value.clone());
+        }
+
+        let part = Part::bytes(attachment.bytes.to_vec())
+            .file_name(attachment.filename.clone())
+            .mime_str(&attachment.content_type)
+            .map_err(|err| Error::InvalidUploadResponse(err.to_string()))?;
+        form = form.part("file", part);
+
+        let request_fut = self.http.post(s3_bucket_url).multipart(form).send();
+
+        let response = tokio::time::timeout(self.timeout, request_fut)
+            .await
+            .map_err(|_| Error::Timeout(self.timeout))?
+            .map_err(Error::AttachmentStorageUpload)?
+            .error_for_status()
+            .map_err(|e| Error::Server {
+                status: e.status().map(|s| s.as_u16()).unwrap_or(0),
+                message: e.to_string(),
+            })?;
+
+        let body = response
+            .text()
+            .await
+            .map_err(Error::AttachmentStorageUpload)?;
+        if body.trim().is_empty() {
+            return Ok(fallback_asset_url(s3_bucket_url, key, &attachment.filename));
+        }
+
+        let response: StorageUploadResponse = serde_json::from_str(&body).map_err(Error::Json)?;
+        response
+            .eager
+            .iter()
+            .find_map(|asset| asset.secure_url.clone())
+            .or(response.secure_url)
+            .ok_or_else(|| Error::InvalidUploadResponse("secure_url".to_string()))
+    }
 }
 
 #[derive(Default)]
@@ -195,4 +349,8 @@ fn merge_optional_field(slot: &mut Option<String>, incoming: Option<String>) {
     if slot.is_none() {
         *slot = incoming;
     }
+}
+
+fn upload_key(index: usize) -> String {
+    format!("file_{index}")
 }
