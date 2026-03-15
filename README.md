@@ -71,6 +71,7 @@ Available endpoints:
 - `GET /v1/models`
 - `POST /v1/search`
 - `POST /v1/search/stream`
+- `POST /v1/images`
 
 ### Authentication
 
@@ -123,6 +124,18 @@ curl -sN -X POST 'http://127.0.0.1:3000/v1/search/stream?human=1' \
   -H 'Content-Type: application/json' \
   -d '{
     "query": "Name 5 programming languages"
+  }'
+```
+
+## Image generation
+
+```bash
+curl -sS -X POST http://127.0.0.1:3000/v1/images \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "prompt": "Generate an image of a cinematic red fox in neon rain",
+    "model": "sonar"
   }'
 ```
 
