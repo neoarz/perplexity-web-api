@@ -8,6 +8,7 @@ It exposes a small REST API on top of `perplexity-web-client` using Axum.
 
 - `GET /health`
 - `GET /v1/models`
+- `POST /v1/attachments`
 - `POST /v1/search`
 - `POST /v1/search/stream`
 - `POST /v1/images`
@@ -54,6 +55,7 @@ cargo run -p perplexity-api-server
   "sources": ["web"],
   "language": "en-US",
   "incognito": true,
+  "attachments": [],
   "follow_up": {
     "backend_uuid": null,
     "attachments": []
@@ -71,6 +73,7 @@ cargo run -p perplexity-api-server
 | `sources` | `string[]` | no | `["web"]` | source filters |
 | `language` | `string` | no | `en-US` | language sent upstream |
 | `incognito` | `bool` | no | `true` | whether to run the request in incognito mode |
+| `attachments` | `string[]` | no | `[]` | uploaded attachment URLs for first-turn image analysis |
 | `follow_up` | `object` | no | `null` | conversation state from a previous response |
 
 ### Follow-up fields
@@ -79,6 +82,15 @@ cargo run -p perplexity-api-server
 | --- | --- | --- | --- | --- |
 | `follow_up.backend_uuid` | `string \| null` | no | `null` | conversation id returned by the previous response |
 | `follow_up.attachments` | `string[]` | no | `[]` | attachment URLs that should carry into the next turn |
+
+### Attachment behavior
+
+| Behavior | Value |
+| --- | --- |
+| top-level `attachments` | supported only in `search` mode |
+| `reason` or `research` with top-level `attachments` | rejected |
+| plain public image URLs | not a supported substitute for uploaded attachments |
+| canonical next-turn attachments | use `follow_up.attachments` from the previous response |
 
 ### Modes
 
@@ -123,6 +135,86 @@ curl -sS -X POST http://127.0.0.1:3000/v1/search \
   }'
 ```
 
+## Attachments
+
+`POST /v1/attachments` uploads image files through Perplexity's real attachment pipeline and returns attachment URLs you can send to `POST /v1/search` or `POST /v1/search/stream`.
+
+### Request shape
+
+Send `multipart/form-data` with repeated `files` fields.
+
+### Request fields
+
+| Field | Type | Required | Description |
+| --- | --- | --- | --- |
+| `files` | multipart file field | yes | repeated image files to upload |
+
+### Upload rules
+
+| Behavior | Value |
+| --- | --- |
+| accepted file types | `image/*` only |
+| repeated fields | use repeated `files` parts |
+| file order | preserved |
+| MIME detection | server validates the actual file bytes and normalizes the upload MIME type |
+| max files per request | `10` |
+| max file size | `10 MB` per file |
+| empty files | rejected |
+| unsupported MIME types | rejected |
+
+For whole-request protection, configure router-level `DefaultBodyLimit` or `RequestBodyLimitLayer` separately.
+
+### Response shape
+
+```json
+{
+  "attachments": [
+    {
+      "url": "https://ppl-ai-file-upload.s3.amazonaws.com/...",
+      "file_uuid": "uuid",
+      "filename": "example.png",
+      "content_type": "image/png",
+      "size_bytes": 12345
+    }
+  ]
+}
+```
+
+### Response fields
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `attachments` | `object[]` | uploaded attachments in request order |
+| `attachments[].url` | `string` | attachment URL to send in `search.attachments` |
+| `attachments[].file_uuid` | `string` | upstream file id for the uploaded asset |
+| `attachments[].filename` | `string` | original filename |
+| `attachments[].content_type` | `string` | uploaded MIME type |
+| `attachments[].size_bytes` | `number` | uploaded file size in bytes |
+
+### Upload example
+
+```bash
+curl -sS -X POST http://127.0.0.1:3000/v1/attachments \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -F 'files=@/absolute/path/to/example.png'
+```
+
+### Search with attachment example
+
+```bash
+curl -sS -X POST http://127.0.0.1:3000/v1/search \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": "Analyze the attached image",
+    "mode": "search",
+    "model": "sonar",
+    "attachments": [
+      "https://ppl-ai-file-upload.s3.amazonaws.com/..."
+    ]
+  }'
+```
+
 ## Image generation
 
 `POST /v1/images` generates images through the same upstream Perplexity ask flow used by search, then returns the generated image assets.
@@ -146,6 +238,8 @@ curl -sS -X POST http://127.0.0.1:3000/v1/search \
 | `model` | `string` | no | server default search model | optional search-model override |
 | `language` | `string` | no | `en-US` | language sent upstream |
 | `incognito` | `bool` | no | `true` | whether to run the request in incognito mode |
+
+`/v1/images` is generation-only in this release. It does not accept uploaded input images or image-edit requests.
 
 ### Model behavior
 

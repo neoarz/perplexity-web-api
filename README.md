@@ -72,6 +72,7 @@ Available endpoints:
 - `POST /v1/search`
 - `POST /v1/search/stream`
 - `POST /v1/images`
+- `POST /v1/attachments`
 
 ### Authentication
 
@@ -137,6 +138,14 @@ curl -sS -X POST http://127.0.0.1:3000/v1/images \
     "prompt": "Generate an image of a cinematic red fox in neon rain",
     "model": "sonar"
   }'
+```
+
+### Attachments
+
+```bash
+curl -sS -X POST http://127.0.0.1:3000/v1/attachments \
+  -H 'Authorization: Bearer YOUR_API_KEY' \
+  -F 'files=@/absolute/path/to/example.png'
 ```
 
 ### Follow-up

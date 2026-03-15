@@ -13,6 +13,12 @@ pub enum Error {
     #[error("request to Perplexity failed: {0}")]
     SearchRequest(#[source] rquest::Error),
 
+    #[error("couldn't request attachment upload URLs: {0}")]
+    AttachmentUploadRequest(#[source] rquest::Error),
+
+    #[error("couldn't upload the attachment to storage: {0}")]
+    AttachmentStorageUpload(#[source] rquest::Error),
+
     #[error("couldn't read the JSON response: {0}")]
     Json(#[from] serde_json::Error),
 
@@ -24,6 +30,12 @@ pub enum Error {
 
     #[error("perplexity returned {status}: {message}")]
     Server { status: u16, message: String },
+
+    #[error("perplexity rejected the upload: {0}")]
+    UploadRejected(String),
+
+    #[error("upload response was missing {0}")]
+    InvalidUploadResponse(String),
 
     #[error("stream ended before anything came back")]
     UnexpectedEndOfStream,

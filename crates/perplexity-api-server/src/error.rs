@@ -96,6 +96,23 @@ impl ApiError {
     pub fn from_client_error(err: perplexity_web_client::Error) -> Self {
         match &err {
             perplexity_web_client::Error::Timeout(_) => Self::upstream_timeout(err.to_string()),
+            perplexity_web_client::Error::UploadRejected(code) => {
+                if matches!(
+                    code.as_str(),
+                    "unsupported_type"
+                        | "too_large"
+                        | "too_small"
+                        | "no_name"
+                        | "failed_moderation"
+                        | "image_failed_moderation"
+                        | "failed_security_check"
+                        | "attachments_disabled_by_organization"
+                ) {
+                    Self::invalid_request(err.to_string())
+                } else {
+                    Self::perplexity_error(err.to_string())
+                }
+            }
             perplexity_web_client::Error::Server { .. } => Self::perplexity_error(err.to_string()),
             _ => Self::perplexity_error(err.to_string()),
         }
